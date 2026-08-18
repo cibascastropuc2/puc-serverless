@@ -11,4 +11,15 @@ Este projeto contem uma funcao serverless simples que responde a requisicoes HTT
 * Node.js instalado (versao 18 ou superior)
 * Terminal de comandos aberto
 
-* 
+### Passo a passo
+1. Clone o repositorio para sua maquina:
+   git clone https://github.com/seu-usuario/cloud-serverless-checkpoint1.git
+
+2. Entre na pasta do projeto:
+   cd cloud-serverless-checkpoint1
+
+3. Instale as dependencias do projeto:
+   npm install
+
+4. Rode o servidor de testes local:
+   npm start
