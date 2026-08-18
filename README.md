@@ -25,4 +25,7 @@ Este projeto contem uma funcao serverless simples que responde a requisicoes HTT
    npm start
 
 5. Teste no navegador ou usando PowerShell:
-   Invoke-WebRequest https://func-checkpoint1-cibas2026.azurewebsites.net/api/HelloWorld
+   Invoke-WebRequest https://XXXX/HelloWorld
+
+6. Resultado:
+   Olá! Minha primeira função serverless está funcionando!
