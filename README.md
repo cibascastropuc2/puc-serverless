@@ -23,3 +23,6 @@ Este projeto contem uma funcao serverless simples que responde a requisicoes HTT
 
 4. Rode o servidor de testes local:
    npm start
+
+5. Teste no navegador ou usando PowerShell:
+   Invoke-WebRequest https://func-checkpoint1-cibas2026.azurewebsites.net/api/HelloWorld
