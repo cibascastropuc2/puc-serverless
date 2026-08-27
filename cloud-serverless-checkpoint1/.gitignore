@@ -23,6 +23,7 @@ project.lock.json
 .secrets
 appsettings.json
 local.settings.json
+send-message.ps1
 
 node_modules
 dist
@@ -32,7 +33,7 @@ dist
 
 # Python Environments
 .env
-.venv
+.venv/
 env/
 venv/
 ENV/
