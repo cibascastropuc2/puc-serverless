@@ -43,7 +43,7 @@ A aplicação utiliza o seguinte fluxo:
                         v
                   Processamento
 
-```text
+```
 
 A Azure Function não possui um endpoint HTTP para receber o pedido.
 
@@ -84,23 +84,31 @@ Essa configuração deve conter a connection string do Azure Service Bus.
 - Execução local
 
 No PowerShell, configure temporariamente a variável de ambiente:
+```text
 $env:SERVICE_BUS_CONNECTION="SUA_CONNECTION_STRING"
-
-
+```
 
 ##  Configuração do ambiente Python
 
 Na pasta do projeto, crie um ambiente virtual:
+```text
 python -m venv .venv
+```
 
 Ative o ambiente:
+```text
 .\.venv\Scripts\Activate.ps1
+```
 
 Caso o PowerShell bloqueie a execução do ambiente virtual, utilize:
+```text
 Set-ExecutionPolicy -Scope Process Bypass
+```
 
 Depois ative novamente:
+```text
 .\.venv\Scripts\Activate.ps1
+```
 
 ##  Instalação das dependências
 
