@@ -43,6 +43,8 @@ A aplicação utiliza o seguinte fluxo:
                         v
                   Processamento
 
+```text
+
 A Azure Function não possui um endpoint HTTP para receber o pedido.
 
 Ela é acionada automaticamente quando uma nova mensagem é disponibilizada na Subscription do Service Bus.
