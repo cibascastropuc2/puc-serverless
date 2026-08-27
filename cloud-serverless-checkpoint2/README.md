@@ -249,8 +249,10 @@ Produto: notebook
 Quantidade: 1
 
 Pedido processado com sucesso.
-
 ```
 
 A execução deverá ser finalizada com sucesso:
-   Executed 'Functions.process_order' (Succeeded)
+
+```text
+Executed 'Functions.process_order' (Succeeded)
+```   
