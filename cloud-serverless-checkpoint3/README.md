@@ -1,20 +1,23 @@
-# Checkpoint 2 - Arquitetura Event-Driven com Azure Service Bus
+# Checkpoint 3 - Orquestração de Serviços com Azure Durable Functions
 
 ## Objetivo
 
-Este projeto corresponde ao Checkpoint 2 da disciplina de Cloud/Serverless.
+EEste projeto corresponde ao Checkpoint 3 da disciplina de Cloud/Serverless.
 
-O objetivo é evoluir a aplicação desenvolvida no Checkpoint 1, substituindo o modelo de execução baseado em HTTP por uma arquitetura orientada a eventos (Event-Driven).
+O objetivo é evoluir a aplicação desenvolvida nos checkpoints anteriores, criando uma arquitetura de orquestração de serviços serverless, permitindo controlar o fluxo de processamento de pedidos, aplicar regras de idempotência, realizar retry em caso de falhas e encaminhar pedidos que não puderam ser processados para uma fila de falhas.
 
-Nesta implementação foi utilizado o Microsoft Azure, utilizando:
+Nesta implementação foi utilizado o Microsoft Azure, utilizando::
 
 - Azure Functions
 - Python
+- Azure Durable Functions
 - Azure Service Bus
-- Service Bus Topic
-- Service Bus Subscription
+- Azure Table Storage
+- Service Bus Queue
+- Durable Functions Orchestrator
+- Activity Functions
 
-O professor autorizou a utilização do Azure como alternativa ao Google Cloud Pub/Sub.
+A proposta original do checkpoint utiliza o Google Cloud Workflows. O professor autorizou a utilização do Azure como alternativa, sendo utilizado o Azure Durable Functions para realizar a orquestração do fluxo.
 
 ---
 
@@ -23,236 +26,434 @@ O professor autorizou a utilização do Azure como alternativa ao Google Cloud P
 A aplicação utiliza o seguinte fluxo:
 
 ```text
-                    Publisher
-                        |
-                        | JSON
-                        v
+                     Pedido
+                       |
+                       | JSON
+                       v
               Azure Service Bus
-                        |
-                        v
-                 Topic: orders
-                        |
-                        v
-          Subscription: orders-subscription
-                        |
-                        | Event
-                        v
-              Azure Function
-                 process_order
-                        |
-                        v
-                  Processamento
+                       |
+                       v
+                  Orchestrator
+                order_orchestrator
+                       |
+                       v
+              validate_order_activity
+                       |
+                       v
+              process_order_activity
+                       |
+                 +-----+-----+
+                 |           |
+              Sucesso       Falha
+                 |           |
+                 |           v
+                 |          Retry
+                 |           |
+                 |      +----+----+
+                 |      |         |
+                 |   Sucesso    Falha
+                 |                 |
+                 |                 v
+                 |          Falha definitiva
+                 |                 |
+                 |                 v
+                 |       register_failure
+                 |                 |
+                 |                 v
+                 |          failed-orders
+                 |
+                 v
+              Concluído
+
+```
+---
+
+## Componentes
+
+Responsável pelo recebimento e comunicação das mensagens relacionadas aos pedidos.
+
+A mensagem contém os dados do pedido em formato JSON.
+
+Exemplo:
+
+{
+    "order_id": "1001",
+    "customer": "cibas",
+    "product": "notebook",
+    "quantity": 1
+}
+
+---
+
+## Componentes
+
+O order_orchestrator é responsável por controlar a execução do fluxo.
+
+Ele determina a ordem em que as Activities serão executadas e também realiza o tratamento das falhas.
+
+Fluxo principal:
+
+```text
+Pedido
+  |
+  v
+Validação
+  |
+  v
+Processamento
+  |
+  v
+Sucesso
+
+Em caso de erro:
+
+Processamento
+     |
+     v
+   Falha
+     |
+     v
+   Retry
+     |
+     v
+Falha definitiva
+     |
+     v
+register_failure
+     |
+     v
+failed-orders
 
 ```
 
-A Azure Function não possui um endpoint HTTP para receber o pedido.
+---
 
-Ela é acionada automaticamente quando uma nova mensagem é disponibilizada na Subscription do Service Bus.
+## Activities
 
-Estrutura do projeto
-cloud-serverless-checkpoint2/
-│
-├── function_app.py
-├── requirements.txt
-├── host.json
-├── send-message.ps1
-├── .gitignore
-└── README.md
+As responsabilidades do processamento foram separadas em diferentes Activities.
+
+validate_order_activity
+
+Responsável por validar os dados recebidos do pedido antes que o processamento seja iniciado.
 
 
-## Pré-requisitos
+---
 
-Para executar o projeto localmente é necessário ter instalado:
+## process_order_activity
 
-- Azure CLI
+Responsável pelo processamento do pedido.
+
+Essa Activity também está sujeita ao mecanismo de retry configurado no Orchestrator.
+
+Para validar o funcionamento do retry, foi utilizado um erro proposital durante os testes:
+
+raise Exception("Erro proposital para testar retry")
+
+---
+
+## register_failure
+
+Responsável pelo tratamento da falha definitiva.
+
+Quando todas as tentativas de retry são esgotadas, essa Activity é executada e o pedido é enviado para:
+
+failed-orders
+
+Exemplo de log obtido durante o teste:
+
+Falha definitiva no pedido 9999
+Pedido 9999 enviado para failed-orders.
+
+
+---
+
+## Retry
+
+O projeto utiliza o mecanismo de retry do Azure Durable Functions.
+
+Quando ocorre uma falha durante a execução de uma Activity, o Orchestrator realiza novas tentativas de execução de acordo com a configuração definida.
+
+O fluxo é:
+
+```text
+process_order_activity
+          |
+          v
+        Falha
+          |
+          v
+       Retry
+          |
+          v
+    Nova tentativa
+          |
+          +------> Sucesso
+          |
+          +------> Falha
+                       |
+                       v
+                 Nova tentativa
+                       |
+                       +------> Sucesso
+                       |
+                       +------> Falha definitiva
+```
+---
+
+## Idempotência
+
+O projeto implementa uma regra de idempotência para evitar que um mesmo pedido seja processado mais de uma vez.
+
+Para isso, é utilizado o Azure Table Storage para armazenar informações dos pedidos que já foram processados.
+
+Antes de processar um pedido, o sistema verifica se o order_id já foi registrado.
+
+```text
+                 Pedido
+                    |
+                    v
+          Verifica order_id
+                    |
+             +------+------+
+             |             |
+            SIM           NÃO
+             |             |
+             v             v
+       Não processa     Processa
+                           |
+                           v
+                    Registra pedido
+```
+
+Dessa forma, caso o mesmo pedido seja recebido novamente, o processamento duplicado é evitado.
+
+---
+
+## Tratamento de Falhas
+
+Quando o processamento de um pedido falha, o Orchestrator tenta executar novamente a Activity de processamento utilizando o mecanismo de retry.
+
+Caso todas as tentativas sejam esgotadas, o pedido é considerado como uma falha definitiva.
+
+Nesse cenário, a Activity register_failure é executada e o pedido é encaminhado para a estrutura failed-orders.
+
+Exemplo:
+
+```text
+Pedido 9999
+     |
+     v
+process_order_activity
+     |
+     v
+Erro proposital
+     |
+     v
+Retry
+     |
+     v
+Retry
+     |
+     v
+Falha definitiva
+     |
+     v
+register_failure
+     |
+     v
+failed-orders
+
+```
+
+---
+
+## Testes
+
+Foram realizados testes para validar os principais requisitos do projeto.
+
+
+---
+
+## Teste 1 - Processamento com sucesso
+
+Foi utilizado um pedido válido:
+
+{
+    "order_id": "1001",
+    "customer": "cibas",
+    "product": "notebook",
+    "quantity": 1
+}
+
+Resultado esperado:
+
+```text
+Pedido recebido
+      |
+      v
+Pedido validado
+      |
+      v
+Pedido processado
+      |
+      v
+Sucesso
+
+```
+
+---
+
+## Teste 2 - Idempotência
+
+O mesmo pedido é enviado novamente utilizando o mesmo order_id.
+
+Resultado esperado:
+
+```text
+Pedido 1001 recebido
+       |
+       v
+Pedido já processado
+       |
+       v
+Processamento duplicado evitado
+
+```
+
+---
+
+## Teste 3 - Retry e Falha Definitiva
+
+Foi utilizado o pedido 9999 para provocar uma falha proposital durante o processamento.
+
+Erro utilizado:
+
+raise Exception("Erro proposital para testar retry")
+
+O log apresentou:
+
+Falha definitiva no pedido 9999
+Pedido 9999 enviado para failed-orders.
+
+A Activity register_failure foi executada com sucesso e o Orchestrator terminou com:
+
+RuntimeStatus: Completed
+
+Esse teste demonstra o funcionamento do mecanismo de:
+
+- Retry
+- Tratamento de exceção
+- Falha definitiva
+- Encaminhamento para failed-orders
+
+---
+
+## Execução Local
+
+Para executar o projeto localmente, é necessário possuir:
+
+- Python 3.11
 - Azure Functions Core Tools
+- Azure CLI
 - PowerShell
-- Python 3.12 ou versão compatível com a aplicação
 
-Também é necessário possuir acesso ao Azure Service Bus utilizado pelo projeto.
+Primeiro, instale as dependências:
 
-
-## Configuração das credenciais
-
-As credenciais do Azure Service Bus não ficam armazenadas no código-fonte.
-
-O projeto utiliza a configuração:
-SERVICE_BUS_CONNECTION
-
-Essa configuração deve conter a connection string do Azure Service Bus.
-
-- Execução local
-
-No PowerShell, configure temporariamente a variável de ambiente:
-```text
-$env:SERVICE_BUS_CONNECTION="SUA_CONNECTION_STRING"
-```
-
-##  Configuração do ambiente Python
-
-Na pasta do projeto, crie um ambiente virtual:
-```text
-python -m venv .venv
-```
-
-Ative o ambiente:
-```text
-.\.venv\Scripts\Activate.ps1
-```
-
-Caso o PowerShell bloqueie a execução do ambiente virtual, utilize:
-```text
-Set-ExecutionPolicy -Scope Process Bypass
-```
-
-Depois ative novamente:
-```text
-.\.venv\Scripts\Activate.ps1
-```
-
-##  Instalação das dependências
-
-Com o ambiente virtual ativado:
 pip install -r requirements.txt
 
-O arquivo requirements.txt contém:
-- azure-functions
-- azure-servicebus
-- Configuração local da Azure Function
+Em seguida, configure o arquivo:
 
-Para executar a Function localmente, configure o arquivo:
 local.settings.json
 
-```text
-Exemplo:
-{
-  "IsEncrypted": false,
-  "Values": {
-    "AzureWebJobsStorage": "UseDevelopmentStorage=true",
-    "FUNCTIONS_WORKER_RUNTIME": "python",
-    "SERVICE_BUS_CONNECTION": "SUA_CONNECTION_STRING"
-  }
-}
-```
+Esse arquivo deve conter as configurações necessárias para execução local.
 
-A connection string deve ser substituída pela credencial válida do Azure Service Bus.
+O arquivo local.settings.json não deve ser enviado para o GitHub, pois pode conter informações sensíveis.
 
-## Executando a Azure Function localmente
+Para iniciar as Azure Functions localmente:
 
-Com o ambiente Python ativado e as dependências instaladas:
-```text
 func start
+
+
+---
+
+## Segurança
+
+Nenhuma credencial, chave de acesso, token ou connection string real deve ser armazenada no repositório público.
+
+O arquivo:
+```text
+local.settings.json
 ```
 
-A Azure Functions Core Tools deverá identificar a função:
-process_order
+deve permanecer no .gitignore.
 
-A função utiliza um Service Bus Topic Trigger.
+Foi disponibilizado um arquivo de exemplo:
 
-Não existe endpoint HTTP para executar a função.
-
-Enviando uma mensagem para o Service Bus
-
-Para facilitar o teste, o projeto possui o script:
 ```text
-send-message.ps1
+local.settings.json.example
 ```
 
-O script publica uma mensagem JSON no Topic:
-orders
+Esse arquivo contém apenas a estrutura necessária para configuração do ambiente, sem credenciais reais.
 
-Execute:
+---
+
+## Resultado
+
+A implementação evolui a arquitetura dos checkpoints anteriores para um modelo baseado em orquestração de serviços serverless.
+
+O Azure Durable Functions é responsável por controlar o fluxo de execução, enquanto as Activities realizam as operações individuais.
+
+A solução implementa:
+
+- Orquestração de serviços
+- Processamento de pedidos
+- Validação
+- Idempotência
+- Retry automático
+- Tratamento de falhas
+- Falha definitiva
+- failed-orders
+- Comunicação através do Azure Service Bus
+- Persistência para controle de processamento
+- Execução local
+- Boas práticas de segurança
+
 ```text
-.\send-message.ps1
+              Azure Service Bus
+                     |
+                     v
+             Order Orchestrator
+                     |
+          +----------+----------+
+          |                     |
+          v                     v
+      Validation            Processing
+                                |
+                           +----+----+
+                           |         |
+                        Sucesso     Falha
+                           |         |
+                           |       Retry
+                           |         |
+                           |    Falha definitiva
+                           |         |
+                           |         v
+                           |   Register Failure
+                           |         |
+                           |         v
+                           |   failed-orders
+                           |
+                           v
+                        Concluído
+
 ```
 
+---
 
-Exemplo de mensagem:
-```text
-{
-  "order_id": 1001,
-  "customer": "cibas",
-  "product": "notebook",
-  "quantity": 1
-}
-```
+## Conclusão
 
-Ao executar o script, deverá ser exibido:
-Mensagem enviada com sucesso!
+O Checkpoint 3 demonstra a evolução da aplicação para uma arquitetura serverless orquestrada, utilizando Azure Durable Functions para controlar o fluxo entre diferentes serviços.
 
-## Fluxo de processamento
+A implementação permite lidar com processamento normal, evitar duplicidades por meio de idempotência, realizar novas tentativas automaticamente em caso de falhas e encaminhar pedidos que não puderam ser processados para failed-orders.
 
-Após o envio da mensagem, o fluxo será:
-
-```text
-send-message.ps1
-        |
-        v
-Azure Service Bus
-        |
-        v
-Topic: orders
-        |
-        v
-orders-subscription
-        |
-        v
-Azure Function
-process_order
-        |
-        v
-Processamento da mensagem
-```
-
-A função recebe o conteúdo da mensagem e extrai os dados do pedido.
-
-## Código da Function
-
-A função principal está localizada em:
-```text
-function_app.py
-```
-
-O trigger utilizado é:
-```text
-@app.service_bus_topic_trigger(
-    arg_name="message",
-    topic_name="orders",
-    subscription_name="orders-subscription",
-    connection="SERVICE_BUS_CONNECTION"
-)
-```
-
-A função recebe a mensagem:
-```text
-def process_order(message: func.ServiceBusMessage):
-```
-
-O conteúdo da mensagem é convertido para texto e depois para um objeto JSON:
-```text
-body = message.get_body().decode("utf-8")
-order = json.loads(body)
-```
-
-Depois os dados do pedido são registrados nos logs.
-
-Após o envio da mensagem, os logs da Function deverão apresentar informações semelhantes a:
-
-```text
-================================
-Pedido recebido do Service Bus
-================================
-
-Order ID: 1001
-Cliente: cibas
-Produto: notebook
-Quantidade: 1
-
-Pedido processado com sucesso.
-```
-
-A execução deverá ser finalizada com sucesso:
-
-```text
-Executed 'Functions.process_order' (Succeeded)
-```   
+Dessa forma, a solução atende aos principais requisitos propostos para o Checkpoint 3.

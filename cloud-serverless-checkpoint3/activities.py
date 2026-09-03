@@ -27,17 +27,10 @@ def get_table_client():
 
     connection_string = os.environ["AzureWebJobsStorage"]
 
-    client = TableClient.from_connection_string(
+    return TableClient.from_connection_string(
         conn_str=connection_string,
         table_name=TABLE_NAME
     )
-
-    try:
-        client.create_table()
-    except ResourceExistsError:
-        pass
-
-    return client
 
 
 # ============================================================
