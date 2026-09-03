@@ -327,17 +327,20 @@ Processamento duplicado evitado
 Foi utilizado o pedido 9999 para provocar uma falha proposital durante o processamento.
 
 Erro utilizado:
-
+```text
 raise Exception("Erro proposital para testar retry")
+```
 
 O log apresentou:
-
+```text
 Falha definitiva no pedido 9999
 Pedido 9999 enviado para failed-orders.
+```
 
 A Activity register_failure foi executada com sucesso e o Orchestrator terminou com:
-
+```text
 RuntimeStatus: Completed
+```
 
 Esse teste demonstra o funcionamento do mecanismo de:
 
