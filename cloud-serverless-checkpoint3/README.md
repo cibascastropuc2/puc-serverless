@@ -358,21 +358,23 @@ Para executar o projeto localmente, é necessário possuir:
 - PowerShell
 
 Primeiro, instale as dependências:
-
+```text
 pip install -r requirements.txt
+```
 
 Em seguida, configure o arquivo:
-
+```text
 local.settings.json
+```
 
 Esse arquivo deve conter as configurações necessárias para execução local.
 
 O arquivo local.settings.json não deve ser enviado para o GitHub, pois pode conter informações sensíveis.
 
 Para iniciar as Azure Functions localmente:
-
+```text
 func start
-
+```
 
 ---
 
