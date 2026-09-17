@@ -1,0 +1,79 @@
+bin/
+**/bin/
+!Modules/**
+obj
+csx
+.vs
+edge
+Publish
+
+*.user
+*.suo
+*.cscfg
+*.Cache
+project.lock.json
+
+/packages
+/TestResults
+
+/tools/NuGet.exe
+/App_Data
+/secrets
+/data
+.secrets
+appsettings.json
+local.settings.json
+send-message.ps1
+
+node_modules
+dist
+
+# Local python packages
+.python_packages/
+
+# Python Environments
+.env
+.venv/
+env/
+venv/
+ENV/
+env.bak/
+venv.bak/
+*.py[cod]
+
+# Byte-compiled / optimized / DLL files
+__pycache__/
+*.py[cod]
+*$py.class
+
+# Environment / secrets
+.env
+.env.*
+!.env.example
+
+# Azure local settings
+local.settings.json
+
+# Azurite artifacts
+__blobstorage__
+__queuestorage__
+__tablestorage__
+__azurite_db*__.json
+AzuriteConfig
+
+# VS Code
+.vscode/
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Test / cache
+.pytest_cache/
+.coverage
+htmlcov/
+
+# Terraform / Azure generated files
+.terraform/
+*.tfstate
+*.tfstate.*

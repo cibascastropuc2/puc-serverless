@@ -1,0 +1,84 @@
+name: Checkpoint 5 - Azure Function CI/CD
+
+on:
+  push:
+    branches:
+      - main
+
+  workflow_dispatch:
+
+permissions:
+  id-token: write
+  contents: read
+
+env:
+  AZURE_FUNCTIONAPP_NAME: func-checkpoint4-cibas2026
+  PYTHON_VERSION: "3.11"
+
+jobs:
+  build-and-deploy:
+
+    runs-on: ubuntu-latest
+
+    steps:
+
+      # ============================================================
+      # 1. Baixar o código do repositório
+      # ============================================================
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      # ============================================================
+      # 2. Configurar Python
+      # ============================================================
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+
+      # ============================================================
+      # 3. Instalar dependências
+      # ============================================================
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          if [ -f requirements.txt ]; then
+            pip install -r requirements.txt
+          fi
+
+      # ============================================================
+      # 4. Validação de sintaxe Python
+      # ============================================================
+      - name: Validate Python syntax
+        run: |
+          python -m compileall -q .
+
+      # ============================================================
+      # 5. Executar testes, caso existam
+      # ============================================================
+      - name: Run tests
+        run: |
+          if [ -d tests ]; then
+            pytest -q
+          else
+            echo "No tests directory found - skipping pytest"
+          fi
+
+      # ============================================================
+      # 6. Login no Azure usando OIDC
+      # ============================================================
+      - name: Azure Login
+        uses: azure/login@v2
+        with:
+          client-id: ${{ secrets.AZURE_CLIENT_ID }}
+          tenant-id: ${{ secrets.AZURE_TENANT_ID }}
+          subscription-id: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
+
+      # ============================================================
+      # 7. Deploy da Azure Function
+      # ============================================================
+      - name: Deploy Azure Function
+        uses: Azure/functions-action@v1
+        with:
+          app-name: ${{ env.AZURE_FUNCTIONAPP_NAME }}
+          package: .
