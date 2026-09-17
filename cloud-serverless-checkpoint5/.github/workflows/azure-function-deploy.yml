@@ -1,4 +1,4 @@
-name: Checkpoint 5 - Azure Function CI/CD
+name: Checkpoint 05 - Azure Function CI/CD
 
 on:
   push:
