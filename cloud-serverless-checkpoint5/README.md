@@ -1,92 +1,79 @@
-# Checkpoint 4 — Observabilidade do Pipeline Serverless
+# Checkpoint 5 — CI/CD e Observabilidade com Azure Functions
 
-## 1. Sobre o projeto
+## 1. Objetivo
 
-Este projeto corresponde ao **Checkpoint 4** da disciplina de Computação Serverless.
+Este checkpoint implementa um pipeline de **CI/CD utilizando GitHub Actions** para automatizar a validação e o deploy de uma aplicação **Azure Functions**.
 
-O objetivo desta etapa é evoluir o pipeline desenvolvido nos checkpoints anteriores, adicionando **observabilidade**, por meio de:
+A solução utiliza:
 
-* logging estruturado;
-* métricas de execução;
-* rastreamento das etapas da orquestração;
-* monitoramento de falhas e retries;
-* análise de performance;
-* análise de custos;
-* identificação de otimizações técnicas.
+* GitHub Actions
+* Azure Functions
+* Azure Functions Flex Consumption
+* Python 3.11
+* Azure Durable Functions
+* Azure Service Bus
+* Azure Table Storage
+* Application Insights
+* Microsoft Entra ID / OIDC
+* GitHub Actions Secrets
 
-A implementação foi realizada utilizando serviços nativos da **Microsoft Azure**.
+O objetivo é permitir que alterações realizadas na branch `main` sejam automaticamente validadas e publicadas no Azure.
 
 ---
 
-# 2. Arquitetura
+## 2. Arquitetura
 
-O pipeline utiliza:
-
-* **Azure Functions**
-* **Azure Durable Functions**
-* **Azure Service Bus**
-* **Azure Storage / Table Storage**
-* **Azure Application Insights**
-* **Azure Monitor**
-
-Fluxo principal:
+O fluxo implementado é baseado no seguinte modelo:
 
 ```text
-                     Azure Service Bus
-                            │
-                            │ orders
-                            ▼
-                  ┌─────────────────────┐
-                  │    process_order    │
-                  │   Service Bus       │
-                  │      Trigger        │
-                  └──────────┬──────────┘
-                             │
-                             ▼
-                  ┌─────────────────────┐
-                  │  order_orchestrator │
-                  │  Durable Function   │
-                  └──────────┬──────────┘
-                             │
-          ┌──────────────────┼──────────────────┐
-          │                  │                  │
-          ▼                  ▼                  ▼
- ┌────────────────┐ ┌──────────────────┐ ┌────────────────┐
- │ validate_order │ │ check_idempotency│ │ register_order │
- └────────────────┘ └──────────────────┘ └────────────────┘
-                                                  │
-                                                  ▼
-                                    ┌────────────────────────┐
-                                    │ process_order_activity  │
-                                    └────────────┬───────────┘
-                                                 │
-                                                 ▼
-                                      ┌──────────────────┐
-                                      │   finish_order   │
-                                      └────────┬─────────┘
-                                               │
-                                               ▼
-                                           COMPLETED
-
-Em caso de falha:
-
-                    order_orchestrator
-                            │
-                            ▼
-                    register_failure
-                            │
-                            ▼
-                     failed-orders
+                    GitHub
+                       |
+                       | Push na branch main
+                       v
+              GitHub Actions
+                       |
+              +--------+--------+
+              |                 |
+              v                 v
+        Setup Python       Validação/Testes
+              |                 |
+              +--------+--------+
+                       |
+                       v
+                Azure Login
+                    OIDC
+                       |
+                       v
+              Azure Functions
+              Flex Consumption
+                       |
+                       v
+             Durable Functions
+                       |
+          +------------+-------------+
+          |            |             |
+          v            v             v
+    Service Bus   Table Storage   App Insights
 ```
 
 ---
 
-# 3. Recursos Azure
+## 3. Componentes Azure
 
-## Function App
+### Function App
+
+A aplicação utiliza a Function App:
 
 ```text
 func-checkpoint4-cibas2026
+```
+
+A mesma Function App utilizada no Checkpoint 4 é reutilizada neste checkpoint.
+
+O plano utilizado é:
+
+```text
+Flex Consumption
 ```
 
 Runtime:
@@ -95,286 +82,267 @@ Runtime:
 Python 3.11
 ```
 
-Plano:
-
-```text
-Flex Consumption
-```
-
-Região:
-
-```text
-East US 2
-```
-
-## Resource Group
+Resource Group:
 
 ```text
 VisualStudioOnline-FBDD2D6D4E494DF1BED16F161CD7EC5B
 ```
 
-## Service Bus
+---
 
-Namespace:
+## 4. GitHub Actions
+
+O workflow está localizado em:
 
 ```text
-sb-checkpoint4-cibas
+.github/workflows/azure-function-deploy.yml
 ```
 
-Topic:
+O workflow é executado automaticamente quando ocorre um `push` na branch:
+
+```text
+main
+```
+
+Também é possível executá-lo manualmente através de:
+
+```yaml
+workflow_dispatch
+```
+
+### Etapas do pipeline
+
+O pipeline executa as seguintes etapas:
+
+1. Checkout do código
+2. Configuração do Python 3.11
+3. Instalação das dependências
+4. Validação da sintaxe Python
+5. Execução dos testes
+6. Login no Azure utilizando OIDC
+7. Deploy da Azure Function
+
+---
+
+## 5. Configuração do Python
+
+O pipeline utiliza:
+
+```yaml
+PYTHON_VERSION: "3.11"
+```
+
+O código da aplicação está localizado em:
+
+```text
+cloud-serverless-checkpoint5
+```
+
+Por isso, o deploy utiliza esse diretório como pacote da Function:
+
+```yaml
+package: ${{ env.APP_PATH }}
+```
+
+O diretório contém o arquivo obrigatório:
+
+```text
+host.json
+```
+
+---
+
+## 6. Dependências
+
+As dependências da aplicação estão definidas em:
+
+```text
+requirements.txt
+```
+
+Atualmente:
+
+```text
+azure-functions
+azure-functions-durable
+azure-servicebus
+azure-data-tables
+azure-core
+```
+
+A biblioteca:
+
+```text
+azure-functions-durable
+```
+
+fornece o suporte utilizado pelo código para:
+
+```python
+import azure.durable_functions as df
+```
+
+---
+
+## 7. Durable Functions
+
+A aplicação utiliza o modelo Python v2 das Azure Functions.
+
+O ponto principal da aplicação está em:
+
+```text
+function_app.py
+```
+
+A aplicação utiliza:
+
+```python
+app = df.DFApp()
+```
+
+O fluxo principal é iniciado através de uma mensagem recebida pelo Azure Service Bus.
+
+### Trigger do Service Bus
+
+A Function possui um trigger associado ao tópico:
 
 ```text
 orders
 ```
 
-Subscription:
+e à subscription:
 
 ```text
 orders-subscription
 ```
 
-Fila utilizada para falhas:
+A conexão é obtida através da configuração:
 
 ```text
-failed-orders
+SERVICE_BUS_CONNECTION
 ```
 
-## Storage Account
+---
+
+## 8. Orquestração
+
+A orquestração principal é:
 
 ```text
-stcheckpoint4cibas2026
+order_orchestrator
 ```
 
-Tabela utilizada para controle dos pedidos:
+O fluxo executado é:
+
+```text
+process_order
+       |
+       v
+order_orchestrator
+       |
+       +--> validate_order
+       |
+       +--> check_idempotency
+       |
+       +--> register_order
+       |
+       +--> process_order_activity
+       |
+       +--> finish_order
+```
+
+Em caso de falha definitiva:
+
+```text
+order_orchestrator
+       |
+       v
+register_failure
+       |
+       +--> Azure Table Storage
+       |
+       +--> Service Bus
+              |
+              v
+        failed-orders
+```
+
+---
+
+## 9. Idempotência
+
+A aplicação utiliza Azure Table Storage para controlar o processamento dos pedidos.
+
+Tabela:
 
 ```text
 Orders
 ```
 
-## Application Insights
+Partition Key:
 
 ```text
-func-checkpoint4-cibas2026
+orders
 ```
 
-O Application Insights é utilizado para coletar:
-
-* requests;
-* traces;
-* exceptions;
-* duração das Functions;
-* status de sucesso/falha;
-* dimensões customizadas;
-* eventos relacionados ao pedido.
-
----
-
-# 4. Estrutura das Functions
-
-As principais Functions do projeto são:
+Row Key:
 
 ```text
-check_idempotency
-finish_order
-order_orchestrator
-process_order
-process_order_activity
-register_failure
-register_order
-validate_order
+order_id
 ```
 
-## `process_order`
+O fluxo verifica se o pedido já foi processado antes de iniciar uma nova execução.
 
-É acionada quando uma mensagem chega ao tópico `orders` do Azure Service Bus.
-
-Responsabilidades:
-
-1. receber a mensagem;
-2. converter o conteúdo para JSON;
-3. identificar o `order_id`;
-4. gerar o `instance_id`;
-5. iniciar a Durable Orchestration.
-
-Exemplo:
+Estados utilizados:
 
 ```text
-order_id = CHK4-004
-
-instance_id = order-CHK4-004
+NEW
+PROCESSING
+COMPLETED
+FAILED
 ```
 
 ---
 
-# 5. Durable Orchestrator
+## 10. Retry
 
-A Function:
+A orquestração utiliza o mecanismo de retry do Durable Functions.
 
-```text
-order_orchestrator
-```
-
-coordena todo o processamento do pedido.
-
-A sequência implementada é:
-
-```text
-validate_order
-        ↓
-check_idempotency
-        ↓
-register_order
-        ↓
-process_order_activity
-        ↓
-finish_order
-```
-
-As Activities são executadas utilizando retry do Durable Functions.
-
-Configuração utilizada:
+Configuração:
 
 ```python
-df.RetryOptions(
+retry_options = df.RetryOptions(
     first_retry_interval_in_milliseconds=5000,
     max_number_of_attempts=3
 )
 ```
 
-Isso permite repetir Activities em situações de falhas transitórias.
-
----
-
-# 6. Validação do pedido
-
-A Activity:
+Portanto:
 
 ```text
-validate_order
+Intervalo inicial: 5 segundos
+Máximo de tentativas: 3
 ```
 
-valida os dados recebidos.
-
-São verificadas informações como:
-
-* `order_id`;
-* `customer`;
-* `product`;
-* `quantity`.
-
-Exemplo de pedido válido:
-
-```json
-{
-  "order_id": "CHK4-004",
-  "customer": "cibas",
-  "product": "Notebook",
-  "quantity": 1
-}
-```
-
----
-
-# 7. Idempotência
-
-A Activity:
+Existe também um teste controlado de falha utilizando:
 
 ```text
-check_idempotency
+order_id = 9999
 ```
 
-consulta a tabela:
-
-```text
-Orders
-```
-
-utilizando:
-
-```text
-PartitionKey = orders
-RowKey = order_id
-```
-
-O objetivo é evitar que um pedido já concluído seja processado novamente.
-
-Quando o pedido já foi concluído, o fluxo pode retornar:
-
-```text
-ALREADY_PROCESSED
-```
-
-Essa estratégia evita processamento duplicado.
-
----
-
-# 8. Registro do pedido
-
-A Activity:
-
-```text
-register_order
-```
-
-registra o pedido no Azure Table Storage.
-
-Durante o processamento inicial, o pedido recebe:
-
-```text
-status = PROCESSING
-```
-
-Após a conclusão:
-
-```text
-status = COMPLETED
-```
-
-Em caso de erro:
-
-```text
-status = FAILED
-```
-
----
-
-# 9. Processamento
-
-A Activity:
+Nesse caso, a Activity:
 
 ```text
 process_order_activity
 ```
 
-representa o processamento efetivo do pedido.
-
-Ela também possui logging estruturado para permitir o acompanhamento da execução pelo Application Insights.
-
-Para testes de retry, existe uma condição controlada de falha utilizando um `order_id` específico.
+gera uma exceção propositalmente para permitir a validação do mecanismo de retry.
 
 ---
 
-# 10. Finalização
+## 11. Tratamento de falhas
 
-A Activity:
-
-```text
-finish_order
-```
-
-atualiza o pedido no Table Storage para:
-
-```text
-COMPLETED
-```
-
-Essa etapa representa a conclusão bem-sucedida do processamento.
-
----
-
-# 11. Tratamento de falhas
-
-Quando uma Activity falha após as tentativas configuradas, o Orchestrator direciona o fluxo para:
+Quando ocorre uma falha definitiva, a aplicação executa:
 
 ```text
 register_failure
@@ -382,427 +350,328 @@ register_failure
 
 Essa Activity:
 
-1. registra o pedido como `FAILED`;
-2. registra informações do erro;
-3. envia o pedido para a fila:
+1. Registra o pedido como `FAILED` no Table Storage.
+2. Registra informações do erro.
+3. Envia uma mensagem para a fila:
 
 ```text
 failed-orders
 ```
 
-Isso permite que falhas sejam identificadas e tratadas posteriormente.
+A mensagem contém informações como:
+
+```json
+{
+  "order_id": "9999",
+  "status": "FAILED",
+  "error": "Erro proposital para testar retry"
+}
+```
 
 ---
 
-# 12. Logging estruturado
+## 12. Application Insights
 
-Foi implementado logging estruturado utilizando `custom_dimensions` do Application Insights.
+A aplicação utiliza logs estruturados para facilitar a observabilidade.
 
-Exemplo:
+Os eventos são registrados através de `custom_dimensions`.
 
-```python
-logging.info(
-    "Pedido recebido do Service Bus",
-    extra={
-        "custom_dimensions": {
-            "event": "order_received",
-            "order_id": str(order_id),
-            "instance_id": instance_id,
-            "customer": str(order.get("customer")),
-            "product": str(order.get("product")),
-            "quantity": str(order.get("quantity")),
-            "status": "RECEIVED"
-        }
-    }
-)
-```
-
-As principais dimensões utilizadas são:
+Exemplos de eventos:
 
 ```text
-event
+order_received
+orchestration_started
+order_validation_started
+order_validation_completed
+idempotency_check_started
+order_registration_started
+order_processing_started
+order_processing_completed
+order_completed
+order_failed
+failed_order_queued
+```
+
+As dimensões podem conter informações como:
+
+```text
 order_id
 instance_id
 activity
 status
 duration_ms
-idempotent
+error_type
+error
 ```
 
-Isso permite consultar os eventos de maneira estruturada no Application Insights.
+Essas informações podem ser consultadas no Application Insights utilizando KQL.
 
 ---
 
-# 13. Application Insights
+## 13. Autenticação GitHub → Azure
 
-O Application Insights foi utilizado como principal ferramenta de observabilidade.
+O pipeline utiliza **OpenID Connect (OIDC)** para autenticar o GitHub Actions no Azure.
 
-As informações podem ser consultadas através de:
+Não é utilizado um client secret tradicional para o login.
+
+O workflow utiliza:
+
+```yaml
+permissions:
+  id-token: write
+  contents: read
+```
+
+E realiza o login através de:
+
+```yaml
+uses: azure/login@v2
+```
+
+com:
+
+```yaml
+client-id: ${{ secrets.AZURE_CLIENT_ID }}
+tenant-id: ${{ secrets.AZURE_TENANT_ID }}
+subscription-id: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
+```
+
+---
+
+## 14. GitHub Secrets
+
+Os seguintes secrets são utilizados pelo workflow:
 
 ```text
-Azure Portal
-    ↓
-Function App
-    ↓
-Application Insights
-    ↓
-Logs
+AZURE_CLIENT_ID
+AZURE_SUBSCRIPTION_ID
+AZURE_TENANT_ID
 ```
 
-Também é possível acessar o recurso de Application Insights diretamente pelo Azure Portal.
+Esses valores não ficam armazenados diretamente no código-fonte.
 
 ---
 
-# 14. Query para acompanhar os pedidos
+## 15. Federated Credential
 
-Uma das consultas utilizadas foi:
+Para permitir o login via OIDC, foi criada uma credencial federada no Microsoft Entra ID.
 
-```kusto
-traces
-| where timestamp > ago(30m)
-| where tostring(customDimensions.order_id) == "CHK4-004"
-   or message contains "CHK4-004"
-| project timestamp, message, customDimensions
-| order by timestamp asc
-```
+A credencial associa o repositório GitHub ao Service Principal utilizado pelo pipeline.
 
-Essa consulta permite acompanhar os eventos relacionados a um pedido específico.
-
----
-
-# 15. Query para medir as Functions
-
-Para analisar duração e sucesso das Functions:
-
-```kusto
-requests
-| where timestamp > ago(30m)
-| where name in (
-    "validate_order",
-    "check_idempotency",
-    "register_order",
-    "process_order_activity",
-    "finish_order",
-    "register_failure",
-    "order_orchestrator",
-    "process_order"
-)
-| project timestamp, name, resultCode, success, duration, operation_Id
-| order by timestamp asc
-```
-
-Os campos utilizados são:
+O fluxo é:
 
 ```text
-timestamp
-name
-resultCode
-success
-duration
-operation_Id
+GitHub Actions
+      |
+      | OIDC Token
+      v
+Microsoft Entra ID
+      |
+      | Federated Credential
+      v
+Service Principal
+      |
+      v
+Azure
+```
+
+Essa configuração elimina a necessidade de armazenar um segredo de longa duração no GitHub Actions.
+
+---
+
+## 16. Validação local
+
+Antes do deploy, o projeto pode ser validado localmente.
+
+Criar ambiente virtual:
+
+```powershell
+python -m venv .venv
+```
+
+Ativar:
+
+```powershell
+.\.venv\Scripts\Activate.ps1
+```
+
+Instalar dependências:
+
+```powershell
+python -m pip install -r requirements.txt
+```
+
+Validar o carregamento da aplicação:
+
+```powershell
+python -c "import function_app; print('IMPORT_OK')"
+```
+
+Validar a sintaxe:
+
+```powershell
+python -m compileall -q .
 ```
 
 ---
 
-# 16. Query para identificar exceções
+## 17. Pipeline de CI/CD
 
-```kusto
-exceptions
-| where timestamp > ago(30m)
-| project
-    timestamp,
-    type,
-    outerMessage,
-    innermostMessage,
-    operation_Id
-| order by timestamp asc
-```
-
-Essa consulta permite identificar erros ocorridos durante o processamento.
-
----
-
-# 17. Evidência de execução — CHK4-004
-
-Foi realizado um teste utilizando o pedido:
+O processo completo é:
 
 ```text
-CHK4-004
+Alteração no código
+        |
+        v
+git add
+        |
+        v
+git commit
+        |
+        v
+git push origin main
+        |
+        v
+GitHub Actions
+        |
+        +--> Checkout
+        |
+        +--> Python 3.11
+        |
+        +--> pip install
+        |
+        +--> compileall
+        |
+        +--> pytest
+        |
+        +--> Azure Login / OIDC
+        |
+        +--> Azure Functions Deploy
+        |
+        v
+Function App atualizada
 ```
 
-Payload:
+---
+
+## 18. Comandos de validação
+
+### Verificar o workflow
+
+```powershell
+gh workflow list
+```
+
+### Verificar execuções
+
+```powershell
+gh run list --workflow "Checkpoint 5 - Azure Function CI/CD" --limit 5
+```
+
+### Verificar detalhes da última execução
+
+```powershell
+gh run view <RUN_ID>
+```
+
+### Verificar as Functions publicadas
+
+```powershell
+az functionapp function list `
+  --name func-checkpoint4-cibas2026 `
+  --resource-group VisualStudioOnline-FBDD2D6D4E494DF1BED16F161CD7EC5B `
+  --query "[].name" `
+  -o table
+```
+
+### Verificar o runtime Flex Consumption
+
+```powershell
+az resource show `
+  --resource-group VisualStudioOnline-FBDD2D6D4E494DF1BED16F161CD7EC5B `
+  --name func-checkpoint4-cibas2026 `
+  --resource-type Microsoft.Web/sites `
+  --api-version 2024-04-01 `
+  --query "properties.functionAppConfig.runtime" `
+  -o json
+```
+
+Resultado esperado:
 
 ```json
 {
-  "order_id": "CHK4-004",
-  "customer": "cibas",
-  "product": "Notebook",
-  "quantity": 1
+  "name": "python",
+  "version": "3.11"
 }
 ```
 
-O Application Insights registrou a execução das principais etapas.
+---
 
-Resultados observados:
+## 19. Evidências
 
-| Function                 | Resultado |  Duração |
-| ------------------------ | --------- | -------: |
-| `validate_order`         | SUCCESS   |  4,23 ms |
-| `check_idempotency`      | SUCCESS   | 43,41 ms |
-| `register_order`         | SUCCESS   | 52,21 ms |
-| `process_order_activity` | SUCCESS   |  5,12 ms |
-| `finish_order`           | SUCCESS   | 48,65 ms |
-
-Todas apresentaram:
+As evidências do checkpoint estão armazenadas em:
 
 ```text
-resultCode = 0
-success = True
+evidencias/
 ```
 
-Isso comprova a execução completa do pipeline para o pedido testado.
+Exemplos:
+
+```text
+checkpoint-5-1.png
+checkpoint-5-2.png
+```
+
+Essas evidências documentam a execução e validação do Checkpoint 5.
 
 ---
 
-# 18. Análise de performance
-
-Com base nos dados coletados no Application Insights, foi possível identificar que as maiores durações do fluxo estão concentradas nas operações relacionadas ao armazenamento.
-
-No teste `CHK4-004`, destacaram-se:
+## 20. Estrutura do projeto
 
 ```text
-check_idempotency       43,41 ms
-register_order          52,21 ms
-finish_order            48,65 ms
+cloud-serverless-checkpoint5/
+│
+├── .funcignore
+├── .gitignore
+├── README.md
+├── activities.py
+├── function_app.py
+├── host.json
+├── orchestrator.py
+├── requirements.txt
+│
+├── evidencias/
+│   ├── checkpoint-5-1.png
+│   └── checkpoint-5-2.png
+│
+└── src/
+    └── functions/
+        └── HelloWorld.js
 ```
-
-Enquanto as etapas de processamento lógico apresentaram tempos menores:
-
-```text
-validate_order           4,23 ms
-process_order_activity   5,12 ms
-```
-
-Isso indica que as operações de persistência e consulta ao Storage representam uma parcela relevante da latência observada.
 
 ---
 
-# 19. Otimização técnica 1 — Redução de operações de Storage
+## 21. Resultado esperado
 
-Atualmente o pipeline realiza operações separadas para:
+Ao final do checkpoint, o processo de entrega deve permitir:
 
-```text
-check_idempotency
-register_order
-finish_order
-```
-
-Uma possível otimização é reduzir chamadas desnecessárias ao Storage ou agrupar operações quando a regra de negócio permitir.
-
-### Benefício esperado
-
-* menor latência;
-* menor quantidade de operações;
-* redução potencial de custo;
-* menor dependência de chamadas externas.
-
-A alteração deve preservar a idempotência e a consistência do processamento.
+* validar automaticamente o código Python;
+* instalar automaticamente as dependências;
+* executar testes automatizados quando disponíveis;
+* autenticar no Azure sem armazenar client secret;
+* realizar o deploy automático da Azure Function;
+* executar Durable Functions;
+* processar mensagens do Service Bus;
+* controlar idempotência utilizando Table Storage;
+* realizar retry de Activities;
+* registrar falhas;
+* enviar pedidos com falha para `failed-orders`;
+* gerar logs estruturados para observabilidade no Application Insights.
 
 ---
 
-# 20. Otimização técnica 2 — Estratégia de Retry
+## 22. Conclusão
 
-O pipeline utiliza:
+O Checkpoint 5 demonstra a integração entre **desenvolvimento, automação de entrega, autenticação segura e serviços serverless do Azure**.
 
-```text
-5 segundos
-até 3 tentativas
-```
-
-Essa estratégia é adequada para falhas transitórias, mas erros permanentes não devem necessariamente ser repetidos.
-
-Uma melhoria seria diferenciar:
-
-```text
-Erro transitório
-    → retry
-
-Erro permanente/de validação
-    → falha imediata
-```
-
-Também pode ser utilizada uma estratégia de backoff progressivo.
-
-### Benefício esperado
-
-* menor tempo desperdiçado;
-* menor quantidade de execuções;
-* redução de custo;
-* menor carga sobre os serviços dependentes.
-
----
-
-# 21. Otimização técnica 3 — Dashboards e alertas
-
-Os dados coletados podem ser utilizados para criar indicadores de:
-
-* taxa de sucesso;
-* taxa de falha;
-* duração média;
-* p95 de duração;
-* quantidade de retries;
-* pedidos `FAILED`;
-* pedidos `ALREADY_PROCESSED`.
-
-### Benefício esperado
-
-A equipe consegue identificar rapidamente:
-
-```text
-degradação de performance
-        ↓
-aumento de erros
-        ↓
-aumento de retries
-        ↓
-possível problema operacional
-```
-
-Isso melhora a capacidade de diagnóstico e reduz o tempo necessário para identificar problemas.
-
----
-
-# 22. Análise de custos
-
-A arquitetura utiliza serviços serverless e serviços gerenciados do Azure.
-
-Os principais componentes que podem gerar consumo são:
-
-```text
-Azure Functions
-Azure Service Bus
-Azure Storage
-Application Insights / Azure Monitor
-```
-
-O custo pode aumentar conforme:
-
-* quantidade de mensagens;
-* número de execuções;
-* quantidade de operações no Storage;
-* quantidade de telemetria ingerida;
-* quantidade de retries;
-* retenção de logs.
-
-Uma otimização importante é evitar logging excessivo em produção.
-
-Logs devem conter as informações necessárias para diagnóstico sem gerar volume desnecessário de telemetria.
-
----
-
-# 23. Teste de Retry
-
-Para validar o mecanismo de retry, deve ser enviado um pedido utilizando a condição de falha controlada implementada na Activity:
-
-```text
-process_order_activity
-```
-
-O comportamento esperado é:
-
-```text
-process_order_activity
-        ↓
-      erro
-        ↓
-      retry
-        ↓
-      erro
-        ↓
-      retry
-        ↓
-      erro
-        ↓
-register_failure
-        ↓
-FAILED
-        ↓
-failed-orders
-```
-
-A execução deve ser comprovada através do Application Insights.
-
----
-
-# 24. Teste de idempotência
-
-Para validar a idempotência, deve ser enviado novamente um pedido cujo `order_id` já tenha sido processado.
-
-Exemplo:
-
-```text
-CHK4-004
-```
-
-O comportamento esperado é:
-
-```text
-check_idempotency
-        ↓
-pedido encontrado
-        ↓
-status = COMPLETED
-        ↓
-already_processed = true
-        ↓
-ALREADY_PROCESSED
-```
-
-O pedido não deve ser processado novamente.
-
----
-
-
-# 25. Conclusão
-
-O Checkpoint 4 evoluiu o pipeline serverless dos checkpoints anteriores adicionando uma camada de observabilidade baseada em **Azure Monitor e Application Insights**.
-
-A solução permite acompanhar:
-
-```text
-entrada do pedido
-       ↓
-orquestração
-       ↓
-validação
-       ↓
-idempotência
-       ↓
-persistência
-       ↓
-processamento
-       ↓
-finalização
-       ↓
-resultado
-```
-
-Além disso, a instrumentação permite identificar duração, sucesso, falhas, retries e eventos relacionados a cada pedido.
-
-O teste `CHK4-004` demonstrou a execução bem-sucedida das principais etapas do pipeline, servindo como evidência da integração entre **Service Bus, Durable Functions, Table Storage e Application Insights**.
-
-As otimizações propostas concentram-se na redução de operações de Storage, melhoria da estratégia de retry e evolução da observabilidade com métricas, dashboards e alertas.
-
----
-
-## Tecnologias utilizadas
-
-* Python 3.11
-* Azure Functions
-* Azure Durable Functions
-* Azure Service Bus
-* Azure Storage / Table Storage
-* Azure Application Insights
-* Azure Monitor
-* Kusto Query Language (KQL)
-* PowerShell
+O uso de GitHub Actions permite automatizar o ciclo de entrega da aplicação, enquanto Azure Functions, Durable Functions, Service Bus, Table Storage e Application Insights formam a infraestrutura necessária para processamento assíncrono, controle de estado, retry, tratamento de falhas e observabilidade.
