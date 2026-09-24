@@ -1,0 +1,127 @@
+# ============================================================
+# .NET / Visual Studio
+# ============================================================
+
+bin/
+**/bin/
+!Modules/**
+
+obj/
+csx/
+.vs/
+edge/
+Publish/
+
+*.user
+*.suo
+*.cscfg
+*.Cache
+
+project.lock.json
+
+/packages/
+/TestResults/
+/tools/NuGet.exe
+/App_Data/
+/secrets/
+/data/
+
+.secrets
+appsettings.json
+
+
+# ============================================================
+# Azure / Local Development
+# ============================================================
+
+# Azure Functions local settings - contains secrets
+local.settings.json
+
+# Local scripts that may contain connection strings
+send-message.ps1
+
+
+# ============================================================
+# Python
+# ============================================================
+
+# Local Python packages
+.python_packages/
+
+# Python virtual environments
+.env
+.env.*
+!.env.example
+
+.venv/
+env/
+venv/
+ENV/
+env.bak/
+venv.bak/
+
+# Python bytecode / cache
+__pycache__/
+*.py[cod]
+*$py.class
+
+
+# ============================================================
+# Node.js
+# ============================================================
+
+node_modules/
+dist/
+
+
+# ============================================================
+# Azurite - local Azure Storage emulator
+# ============================================================
+
+__blobstorage__/
+__queuestorage__/
+__tablestorage/
+
+__azurite_db_*.json
+
+AzuriteConfig
+
+
+# ============================================================
+# VS Code
+# ============================================================
+
+.vscode/
+
+
+# ============================================================
+# Operating System
+# ============================================================
+
+.DS_Store
+Thumbs.db
+
+
+# ============================================================
+# Tests / Coverage / Cache
+# ============================================================
+
+.pytest_cache/
+.coverage
+htmlcov/
+
+
+# ============================================================
+# Terraform / Azure generated files
+# ============================================================
+
+.terraform/
+*.tfstate
+*.tfstate.*
+
+
+# ============================================================
+# Optional local logs
+# ============================================================
+
+*.log

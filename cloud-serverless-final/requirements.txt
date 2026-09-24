@@ -1,0 +1,7 @@
+azure-functions
+azure-functions-durable
+azure-servicebus
+azure-data-tables
+azure-core
+azure-identity
+openai
